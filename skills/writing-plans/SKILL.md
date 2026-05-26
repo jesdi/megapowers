@@ -133,20 +133,34 @@ If you find issues, fix them inline. No need to re-review — just fix and move 
 
 ## Execution Handoff
 
-After saving the plan, offer execution choice:
+After saving the plan, assess risk level and recommend an execution mode:
 
-**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Two execution options:**
+**Risk assessment:**
+- **High-risk:** auth, payments, data migration, security, irreversible changes, critical infrastructure
+- **Standard:** all other plans
 
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
+**If high-risk → recommend `interactive-subagent-driven-development`**
 
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
+Offer all three options:
+
+**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Three execution options:**
+
+**1. Interactive Subagent-Driven (recommended for high-risk plans)** - I dispatch a subagent per task, you review each task's diff before approval. Human-in-the-loop with up to 5 revision rounds per task.
+
+**2. Subagent-Driven (recommended for standard plans)** - I dispatch a fresh subagent per task, review between tasks, fast autonomous iteration.
+
+**3. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints.
 
 **Which approach?"**
 
+**If Interactive Subagent-Driven chosen:**
+- If high-risk, affirm: "Good call — this plan touches [risky area] so human review at each step is the right move."
+- **REQUIRED SUB-SKILL:** Use superpowers:interactive-subagent-driven-development
+
 **If Subagent-Driven chosen:**
+- If high-risk, warn: "This plan is flagged as high-risk because it touches [risky area]. Interactive execution would give you oversight at each step. Are you sure you want autonomous execution?"
 - **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development
-- Fresh subagent per task + two-stage review
 
 **If Inline Execution chosen:**
+- Same warning if high-risk
 - **REQUIRED SUB-SKILL:** Use superpowers:executing-plans
-- Batch execution with checkpoints for review
