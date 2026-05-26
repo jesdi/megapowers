@@ -275,5 +275,6 @@ Done!
 **Subagents should use:**
 - **superpowers:test-driven-development** - Subagents follow TDD for each task
 
-**Alternative workflow:**
+**Alternative workflows:**
+- **superpowers:interactive-subagent-driven-development** - Use when human wants to review each task before approval
 - **superpowers:executing-plans** - Use for parallel session instead of same-session execution
