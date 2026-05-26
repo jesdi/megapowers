@@ -162,5 +162,5 @@ Offer all three options:
 - **REQUIRED SUB-SKILL:** Use superpowers:subagent-driven-development
 
 **If Inline Execution chosen:**
-- Same warning if high-risk
+- If high-risk, warn: "This plan is flagged as high-risk ([risky area]). Inline execution gives you no per-task review opportunity. Interactive execution would be safer. Are you sure?"
 - **REQUIRED SUB-SKILL:** Use superpowers:executing-plans

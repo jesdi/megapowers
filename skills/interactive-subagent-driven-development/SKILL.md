@@ -43,13 +43,13 @@ Note: The `reviews/` directory should be deleted after all tasks are approved an
 
 ### Per Task
 
-1. Mark task as in_progress
+1. Mark task as in_progress and create an `.in-progress-<task-name>` sentinel file in `reviews/`
 2. Dispatch implementer subagent with task text + context (fast model for mechanical tasks)
    - If implementer asks questions before/during work, answer them. The human is present — escalate questions to them for decisions the controller can't make.
 3. Handle implementer status: DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
 4. Run spec compliance review (loop until pass)
 5. Run code quality review (loop until pass)
-6. Generate `<task-name>.diff` in `reviews/` directory
+6. Delete the `.in-progress-<task-name>` sentinel, then generate `<task-name>.diff` in `reviews/` directory
 7. Tell human: "Task N ready for review. Diff at `reviews/<task-name>.diff`"
 8. **WAIT for human response**
 
@@ -60,10 +60,12 @@ Note: The `reviews/` directory should be deleted after all tasks are approved an
 - Mark task complete
 - Proceed to next task
 
-**Revisions needed** (human creates `FEEDBACK-<task-name>.md`):
+**Revisions needed** (human creates `FEEDBACK-<task-name>-r<N>.md`):
 - Dispatch feedback subagent (reasoning model) with plan, task, `.diff`, and `FEEDBACK` file
 - Feedback subagent addresses all comments, squashes changes into original commit, regenerates `.diff`, deletes `FEEDBACK` file
 - Return to step 6 (generate diff, announce, wait)
+
+The round counter in the filename persists across sessions, so the 5-round limit is durable.
 
 **Max 5 feedback rounds** — if exceeded, stop and escalate:
 > Task N has gone through 5 revision rounds without approval. The plan may need adjustment — let's discuss whether to re-scope this task or revisit the plan.
@@ -88,29 +90,33 @@ After automated reviews pass, the main agent:
 
 **Human response types:**
 - "approved" / "looks good" / "lgtm" / "task N approved" → delete diff, mark complete, next task
-- "ready" / "feedback added" → check for `reviews/FEEDBACK-<task-name>.md`
-  - If exists → dispatch feedback subagent
+- "ready" / "feedback added" → check for `reviews/FEEDBACK-<task-name>-r<N>.md`
+  - If exists → check the round number in the filename. If `FEEDBACK-<task-name>-r5.md`, escalate immediately.
+  - Otherwise → dispatch feedback subagent
   - If not → treat as approval
 
 **Review directory:**
 ```
 .claude/plans/<plan-name>/reviews/
 ├── task-01-auth-middleware.diff
-├── FEEDBACK-task-01-auth-middleware.md    # (only if revisions needed)
+├── .in-progress-task-02-database-schema   # (only while implementer is running)
+├── FEEDBACK-task-01-auth-middleware-r1.md  # (only if revisions needed)
+├── FEEDBACK-task-01-auth-middleware-r2.md  # (each round increments)
 ├── task-02-database-schema.diff
 └── ...
 ```
 
 ## Feedback Subagent
 
-When human creates a `FEEDBACK-<task-name>.md` file, dispatch a subagent with the most capable reasoning model available.
+When human creates a `FEEDBACK-<task-name>-r<N>.md` file, dispatch a subagent with the most capable reasoning model available.
 
 **Context provided to feedback subagent:**
 - The plan file
 - The specific task from the plan
 - The current `<task-name>.diff`
-- The human's `FEEDBACK-<task-name>.md`
-- The current HEAD SHA (base for diff regeneration)
+- The human's `FEEDBACK-<task-name>-r<N>.md`
+- The base-sha (commit before this task's work began)
+- The current round number N (from the filename)
 
 **Feedback subagent's job:**
 1. Read and understand every comment in the FEEDBACK file
@@ -118,12 +124,16 @@ When human creates a `FEEDBACK-<task-name>.md` file, dispatch a subagent with th
 3. Squash all changes into the original commit: `git reset --soft <base-sha> && git commit -m "original message"`
 4. Run automated reviews (spec compliance + code quality) — loop until pass
 5. Regenerate diff: `git diff <base-sha> HEAD > reviews/<task-name>.diff`
-6. Delete `FEEDBACK-<task-name>.md`
+6. Delete `FEEDBACK-<task-name>-r<N>.md`
 7. Report back
+
+The round counter in the filename persists across sessions, so the 5-round limit is durable.
 
 **After feedback subagent completes:**
 - Main agent tells human: "Task N revised. Updated diff at `reviews/<task-name>.diff`"
 - Returns to waiting state
+
+If the feedback subagent fails (crash, timeout): Re-dispatch once. If it fails again, escalate to human with the FEEDBACK file contents and the subagent's error.
 
 ## Model Selection
 
@@ -143,6 +153,8 @@ Do not start a 6th round without explicit human direction.
 
 On skill start, if `reviews/` directory exists with `.diff` files, a plan is in progress. Resume from the first task whose diff still exists (not yet approved/deleted). No extra state file needed — the presence/absence of diff files is the state.
 
+If an `.in-progress-<task-name>` file exists without a corresponding `.diff`, the task was interrupted mid-execution. Re-execute that task from scratch (the original subagent session is lost).
+
 ## Handling Implementer Status
 
 Same status handling and escalation path as subagent-driven-development. See that skill for the full table.
@@ -159,6 +171,7 @@ Key difference: BLOCKED status always escalates to the human immediately (since 
 - Start implementation on main/master branch without explicit user consent
 - Delete FEEDBACK file before addressing all comments
 - Dispatch multiple implementation subagents in parallel
+- All Red Flags from subagent-driven-development apply here as well — see that skill for the full list. Key ones: provide full task text (don't make subagent read plan), never start code quality review before spec compliance passes, never let self-review replace actual review.
 
 **If human creates a FEEDBACK file:**
 - Address every comment before regenerating diff
