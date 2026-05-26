@@ -25,17 +25,27 @@ Execute plan by dispatching a fresh subagent per task, running automated reviews
 - Batch execution in parallel session (use executing-plans)
 - Human is unavailable for review between tasks
 
+| Scenario | Use |
+|----------|-----|
+| Human wants to review each task | interactive-subagent-driven-development |
+| Autonomous execution, no human present | subagent-driven-development |
+| Parallel session, batch execution | executing-plans |
+
 ## The Process
 
 ### Setup
 1. Read plan file, extract all tasks with full text
 2. Create TodoWrite for all tasks
 3. Ensure `reviews/` directory exists at plan location: `.claude/plans/<plan-name>/reviews/`
+4. For each task, capture the current HEAD as the task's `base-sha` BEFORE dispatching the implementer
+
+Note: The `reviews/` directory should be deleted after all tasks are approved and the branch is finished. It exists only as transient state for the review process.
 
 ### Per Task
 
 1. Mark task as in_progress
 2. Dispatch implementer subagent with task text + context (fast model for mechanical tasks)
+   - If implementer asks questions before/during work, answer them. The human is present — escalate questions to them for decisions the controller can't make.
 3. Handle implementer status: DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED
 4. Run spec compliance review (loop until pass)
 5. Run code quality review (loop until pass)
@@ -58,11 +68,21 @@ Execute plan by dispatching a fresh subagent per task, running automated reviews
 **Max 5 feedback rounds** — if exceeded, stop and escalate:
 > Task N has gone through 5 revision rounds without approval. The plan may need adjustment — let's discuss whether to re-scope this task or revisit the plan.
 
+## Prompt Templates
+
+This skill reuses the review templates from subagent-driven-development. Dispatch reviewers using the same pattern:
+
+- `../subagent-driven-development/implementer-prompt.md` — Dispatch implementer subagent
+- `../subagent-driven-development/spec-reviewer-prompt.md` — Dispatch spec compliance reviewer subagent
+- `../subagent-driven-development/code-quality-reviewer-prompt.md` — Dispatch code quality reviewer subagent
+
+The review loop works identically: dispatch reviewer, reviewer finds issues, implementer fixes, re-review, repeat until approved.
+
 ## Human Review Gate
 
 After automated reviews pass, the main agent:
 
-1. Generates diff: `git diff <base-sha> HEAD > reviews/<task-name>.diff`
+1. Generates diff using the base-sha captured before the implementer ran: `git diff <base-sha> HEAD > reviews/<task-name>.diff`
 2. Announces: "Task N: `<task-name>` ready for review. Diff at `reviews/<task-name>.diff`"
 3. **Waits** — do not proceed until human responds
 
@@ -95,7 +115,7 @@ When human creates a `FEEDBACK-<task-name>.md` file, dispatch a subagent with th
 **Feedback subagent's job:**
 1. Read and understand every comment in the FEEDBACK file
 2. Address each comment with code changes
-3. Squash all changes into the original commit: `git reset --soft <original-base> && git commit -m "original message"`
+3. Squash all changes into the original commit: `git reset --soft <base-sha> && git commit -m "original message"`
 4. Run automated reviews (spec compliance + code quality) — loop until pass
 5. Regenerate diff: `git diff <base-sha> HEAD > reviews/<task-name>.diff`
 6. Delete `FEEDBACK-<task-name>.md`
@@ -125,12 +145,9 @@ On skill start, if `reviews/` directory exists with `.diff` files, a plan is in 
 
 ## Handling Implementer Status
 
-Same as subagent-driven-development:
+Same status handling and escalation path as subagent-driven-development. See that skill for the full table.
 
-- **DONE:** Proceed to spec compliance review
-- **DONE_WITH_CONCERNS:** Read concerns before proceeding. If about correctness or scope, address before review. If observations (e.g., "file is getting large"), note them and proceed.
-- **NEEDS_CONTEXT:** Provide missing context, re-dispatch implementer
-- **BLOCKED:** Escalate to human. Do not force retry without changes.
+Key difference: BLOCKED status always escalates to the human immediately (since the human is actively present for review).
 
 ## Red Flags
 
@@ -151,6 +168,10 @@ Same as subagent-driven-development:
 - Do not proceed. Wait for explicit approval or feedback.
 - Do not interpret silence as approval.
 
+## After All Tasks
+
+Since the human has approved each task individually, the final code reviewer subagent from subagent-driven-development is skipped. Proceed directly to finishing-a-development-branch.
+
 ## Integration
 
 **Required workflow skills:**
@@ -160,6 +181,8 @@ Same as subagent-driven-development:
 
 **Subagents should use:**
 - **superpowers:test-driven-development** - Subagents follow TDD for each task
+
+No final code reviewer subagent — human reviewed each task individually, replacing the holistic review.
 
 **Alternative workflows:**
 - **superpowers:subagent-driven-development** - Autonomous execution (no human review between tasks)
