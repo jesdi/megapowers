@@ -60,6 +60,31 @@ The Superpowers marketplace provides Superpowers and some other related plugins 
   /plugin install superpowers@superpowers-marketplace
   ```
 
+#### Local Development Install
+
+When you're hacking on Superpowers itself and want to test your changes before submitting a PR, you can activate a local build that replaces the installed plugin:
+
+```bash
+./scripts/activate-local-plugin.sh
+```
+
+This copies the repo into `~/.claude/plugins/cache/.../superpowers/local-dev/` and switches `installed_plugins.json` to use it. Your original plugin installation is backed up automatically.
+
+To switch back to the official release:
+
+```bash
+./scripts/deactivate-local-plugin.sh
+```
+
+You can pass a custom version tag and restore a specific version:
+
+```bash
+./scripts/activate-local-plugin.sh local-v1.0.0
+./scripts/deactivate-local-plugin.sh 5.1.0
+```
+
+The local build excludes `.git/` and `docs/superpowers/plans/`. Official plugin updates will overwrite the local build — re-run `activate-local-plugin.sh` to re-apply your changes on top of the latest release.
+
 ### Codex CLI
 
 Superpowers is available via the [official Codex plugin marketplace](https://github.com/openai/plugins).
